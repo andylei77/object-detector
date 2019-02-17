@@ -4,6 +4,7 @@ import argparse
 import sys
 import os
 import time
+import cv2
 
 from distutils.version import StrictVersion
 from PIL import Image
@@ -63,11 +64,11 @@ def run_inference_for_single_image(image, graph):
       print("run time:", end_time - start_time)
 
       # all outputs are float32 numpy arrays, so convert types as appropriate
-      output_dict['num_detections'] = int(output_dict['num_detections'][0])
-      output_dict['detection_classes'] = output_dict[
-          'detection_classes'][0].astype(np.uint8)
-      output_dict['detection_boxes'] = output_dict['detection_boxes'][0]
-      output_dict['detection_scores'] = output_dict['detection_scores'][0]
+      num = int(output_dict['num_detections'][0])
+      output_dict['num_detections'] = num
+      output_dict['detection_classes'] = output_dict['detection_classes'][0].astype(np.uint8)[:num]
+      output_dict['detection_boxes'] = output_dict['detection_boxes'][0][:num]
+      output_dict['detection_scores'] = output_dict['detection_scores'][0][:num]
 
   return output_dict
 
@@ -75,28 +76,25 @@ def main():
   # create graph
   detection_graph = create_graph(FLAGS.model_frozen)
 
+  # prepare data
   image = Image.open(FLAGS.image_path)
+  (image_width, image_height) = image.size
   image_np = load_image_into_numpy_array(image)
-
-
   # Expand dimensions since the model expects images to have shape: [1, None, None, 3]
   image_np_expanded = np.expand_dims(image_np, axis=0)
 
   # Actual detection.
   output_dict = run_inference_for_single_image(image_np, detection_graph)
 
-  '''
-  # Visualization of the results of a detection.
-  vis_util.visualize_boxes_and_labels_on_image_array(
-      image_np,
-      output_dict['detection_boxes'],
-      output_dict['detection_classes'],
-      output_dict['detection_scores'],
-      category_index,
-      instance_masks=output_dict.get('detection_masks'),
-      use_normalized_coordinates=True,
-      line_thickness=8)
-  '''
+  for i in range(output_dict['num_detections']):
+    cls = output_dict['detection_classes'][i]
+    score = output_dict['detection_scores'][i]
+    box_ymin = int(output_dict['detection_boxes'][i][0]*image_height)
+    box_xmin = int(output_dict['detection_boxes'][i][1]*image_width)
+    box_ymax = int(output_dict['detection_boxes'][i][2]*image_height)
+    box_xmax = int(output_dict['detection_boxes'][i][3]*image_width)
+    cv2.rectangle(image_np, (box_xmin,box_ymin), (box_xmax,box_ymax), (0,255,0),3)
+
   plt.figure(figsize=(12, 8)) # Size, in inches
   plt.imshow(image_np)
   plt.show()
