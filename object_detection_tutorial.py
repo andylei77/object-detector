@@ -17,6 +17,9 @@ if StrictVersion(tf.__version__) < StrictVersion('1.9.0'):
 
 from label_utils import label_map_util
 
+def isimage(path):
+  return os.path.splitext(path)[1].lower() in ['.jpg', '.png', '.jpeg']
+
 def create_graph(model_path):
   detection_graph = tf.Graph()
   with detection_graph.as_default():
@@ -73,37 +76,49 @@ def main():
   # create graph
   detection_graph = create_graph(FLAGS.model_frozen)
 
-  # prepare data
-  image = Image.open(FLAGS.image_path)
-  (image_width, image_height) = image.size
-  image_np = load_image_into_numpy_array(image)
-  # Expand dimensions since the model expects images to have shape: [1, None, None, 3]
-  image_np_expanded = np.expand_dims(image_np, axis=0)
+  image_paths = []
+  if os.path.isfile(FLAGS.image_path):
+    image_paths.append(FLAGS.image_path)
+  else:
+    for file_or_dir in os.listdir(FLAGS.image_path):
+      file_path = os.path.join(FLAGS.image_path, file_or_dir)
+      if os.path.isfile(file_path) and isimage(file_path):
+        image_paths.append(file_path)
+  print(image_paths)
 
-  # Actual detection.
-  output_dict = run_inference_for_single_image(image_np, detection_graph)
 
-  for i in range(output_dict['num_detections']):
-    cls_id = output_dict['detection_classes'][i]
-    cls_name = category_index[cls_id]['name']
-    score = output_dict['detection_scores'][i]
-    box_ymin = int(output_dict['detection_boxes'][i][0]*image_height)
-    box_xmin = int(output_dict['detection_boxes'][i][1]*image_width)
-    box_ymax = int(output_dict['detection_boxes'][i][2]*image_height)
-    box_xmax = int(output_dict['detection_boxes'][i][3]*image_width)
-    cv2.rectangle(image_np, (box_xmin,box_ymin), (box_xmax,box_ymax), (0,255,0),3)
-    text = "%s:%.2f" % (cls_name,score)
-    cv2.putText(image_np, text, (box_xmin,box_ymin-4),cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, (255,0,0))
+  for image_path in image_paths:
+    # prepare data
+    image = Image.open(image_path)
+    (image_width, image_height) = image.size
+    image_np = load_image_into_numpy_array(image)
+    # Expand dimensions since the model expects images to have shape: [1, None, None, 3]
+    image_np_expanded = np.expand_dims(image_np, axis=0)
 
-  plt.figure(figsize=(12, 8)) # Size, in inches
-  plt.imshow(image_np)
-  plt.show()
+    # Actual detection.
+    output_dict = run_inference_for_single_image(image_np, detection_graph)
+
+    for i in range(output_dict['num_detections']):
+      cls_id = output_dict['detection_classes'][i]
+      cls_name = category_index[cls_id]['name']
+      score = output_dict['detection_scores'][i]
+      box_ymin = int(output_dict['detection_boxes'][i][0]*image_height)
+      box_xmin = int(output_dict['detection_boxes'][i][1]*image_width)
+      box_ymax = int(output_dict['detection_boxes'][i][2]*image_height)
+      box_xmax = int(output_dict['detection_boxes'][i][3]*image_width)
+      cv2.rectangle(image_np, (box_xmin,box_ymin), (box_xmax,box_ymax), (0,255,0),3)
+      text = "%s:%.2f" % (cls_name,score)
+      cv2.putText(image_np, text, (box_xmin,box_ymin-4),cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, (255,0,0))
+
+    plt.figure(figsize=(12, 8)) # Size, in inches
+    plt.imshow(image_np)
+    plt.show()
 
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--image_path', type=str,
-                      default='/home/andy/selfdrivingcar/models/research/object_detection/test_images/image2.jpg',
+                      default='test_images/',
                       help='image path')
   parser.add_argument('--model_frozen', type=str,
                       default='/home/andy/selfdrivingcar/ssd_mobilenet_v1_coco_2018_01_28/frozen_inference_graph.pb',
