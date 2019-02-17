@@ -12,7 +12,7 @@
 
 for example:
 ```
-python3 object_detection_tutorial.py --model_frozen ssd_mobilenet_v1_coco_2018_01_28/frozen_inference_graph.pb`
+python3 object_detection_tutorial.py --model_frozen ../ssd_mobilenet_v1_coco_2018_01_28/frozen_inference_graph.pb
 ```
 
 ## ref:
