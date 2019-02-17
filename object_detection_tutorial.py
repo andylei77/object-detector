@@ -15,13 +15,7 @@ FLAGS = None
 if StrictVersion(tf.__version__) < StrictVersion('1.9.0'):
   raise ImportError('Please upgrade your TensorFlow installation to v1.9.* or later!')
 
-#from utils import label_map_util
-#from utils import visualization_utils as vis_util
-
-# List of the strings that is used to add correct label for each box.
-#PATH_TO_LABELS = os.path.join('data', 'mscoco_label_map.pbtxt')
-#category_index = label_map_util.create_category_index_from_labelmap(PATH_TO_LABELS, use_display_name=True)
-
+from label_utils import label_map_util
 
 def create_graph(model_path):
   detection_graph = tf.Graph()
@@ -73,6 +67,9 @@ def run_inference_for_single_image(image, graph):
   return output_dict
 
 def main():
+  # labels
+  category_index = label_map_util.create_category_index_from_labelmap(FLAGS.label_path, use_display_name=True)
+
   # create graph
   detection_graph = create_graph(FLAGS.model_frozen)
 
@@ -87,13 +84,16 @@ def main():
   output_dict = run_inference_for_single_image(image_np, detection_graph)
 
   for i in range(output_dict['num_detections']):
-    cls = output_dict['detection_classes'][i]
+    cls_id = output_dict['detection_classes'][i]
+    cls_name = category_index[cls_id]['name']
     score = output_dict['detection_scores'][i]
     box_ymin = int(output_dict['detection_boxes'][i][0]*image_height)
     box_xmin = int(output_dict['detection_boxes'][i][1]*image_width)
     box_ymax = int(output_dict['detection_boxes'][i][2]*image_height)
     box_xmax = int(output_dict['detection_boxes'][i][3]*image_width)
     cv2.rectangle(image_np, (box_xmin,box_ymin), (box_xmax,box_ymax), (0,255,0),3)
+    text = "%s:%.2f" % (cls_name,score)
+    cv2.putText(image_np, text, (box_xmin,box_ymin-4),cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, (255,0,0))
 
   plt.figure(figsize=(12, 8)) # Size, in inches
   plt.imshow(image_np)
@@ -107,6 +107,9 @@ if __name__ == '__main__':
                       help='image path')
   parser.add_argument('--model_frozen', type=str,
                       default='/home/andy/selfdrivingcar/ssd_mobilenet_v1_coco_2018_01_28/frozen_inference_graph.pb',
-                      help='image path')
+                      help='model path')
+  parser.add_argument('--label_path', type=str,
+                      default='label_utils/mscoco_label_map.pbtxt',
+                      help='label path')
   FLAGS, unparsed = parser.parse_known_args()
   main()
