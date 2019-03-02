@@ -121,7 +121,7 @@ if __name__ == '__main__':
                       default='test_images/',
                       help='image path')
   parser.add_argument('--model_frozen', type=str,
-                      default='/home/andy/selfdrivingcar/ssd_mobilenet_v1_coco_2018_01_28/frozen_inference_graph.pb',
+                      default='/home/andy/selfdrivingcar/TFMODEL/ssd_mobilenet_v1_coco_2018_01_28/frozen_inference_graph.pb',
                       help='model path')
   parser.add_argument('--label_path', type=str,
                       default='label_utils/mscoco_label_map.pbtxt',

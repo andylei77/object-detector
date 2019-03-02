@@ -8,7 +8,7 @@
 ## Usage
 
 - download model from https://github.com/tensorflow/models/blob/v1.13.0/research/object_detection/g3doc/detection_model_zoo.md
-- run `python object_detection_tutorial.py /PATH/TO/MODEL`
+- run `python object_detection_tutorial.py --model_frozen /PATH/TO/MODEL`
 
 for example:
 ```
