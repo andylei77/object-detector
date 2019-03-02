@@ -20,54 +20,84 @@ from label_utils import label_map_util
 def isimage(path):
   return os.path.splitext(path)[1].lower() in ['.jpg', '.png', '.jpeg']
 
-def create_graph(model_path):
-  detection_graph = tf.Graph()
-  with detection_graph.as_default():
-    od_graph_def = tf.GraphDef()
-    with tf.gfile.GFile(model_path, 'rb') as fid:
-      serialized_graph = fid.read()
-      od_graph_def.ParseFromString(serialized_graph)
-      tf.import_graph_def(od_graph_def, name='')
-  return detection_graph
+class TFDetector:
+  def __init__(self, model_path, label_path):
+    self.image_tensor, self.tensor_dict, self.sess = self.init_model(model_path)
+    self.category_index = label_map_util.create_category_index_from_labelmap(label_path, use_display_name=True)
+
+  def create_graph(self, model_path):
+    detection_graph = tf.Graph()
+    with detection_graph.as_default():
+      od_graph_def = tf.GraphDef()
+      with tf.gfile.GFile(model_path, 'rb') as fid:
+        serialized_graph = fid.read()
+        od_graph_def.ParseFromString(serialized_graph)
+        tf.import_graph_def(od_graph_def, name='')
+    return detection_graph
+
+  def init_model(self, model_frozen):
+    # create graph
+    graph = self.create_graph(model_frozen)
+
+    with graph.as_default():
+      sess = tf.Session()
+
+      # Get handles to input and output tensors
+      ops = tf.get_default_graph().get_operations()
+      all_tensor_names = {output.name for op in ops for output in op.outputs}
+      tensor_dict = {}
+      for key in [
+          'num_detections', 'detection_boxes', 'detection_scores',
+          'detection_classes', 'detection_masks'
+      ]:
+        tensor_name = key + ':0'
+        if tensor_name in all_tensor_names:
+          tensor_dict[key] = tf.get_default_graph().get_tensor_by_name(
+              tensor_name)
+
+      image_tensor = tf.get_default_graph().get_tensor_by_name('image_tensor:0')
+
+      return image_tensor, tensor_dict, sess
+
+
+  def detect(self, image_np):
+
+    image_height, image_width, _ = image_np.shape
+    # Expand dimensions since the model expects images to have shape: [1, None, None, 3]
+    image_np_expanded = np.expand_dims(image_np, axis=0)
+
+    # Actual detection.
+    start_time = time.time()
+    output_dict = self.sess.run(self.tensor_dict, feed_dict={self.image_tensor: image_np_expanded})
+    num = int(output_dict['num_detections'][0])
+    output_dict['num_detections'] = num
+    output_dict['detection_classes'] = output_dict['detection_classes'][0].astype(np.uint8)[:num]
+    output_dict['detection_boxes'] = output_dict['detection_boxes'][0][:num]
+    output_dict['detection_scores'] = output_dict['detection_scores'][0][:num]
+    end_time = time.time()
+    print("run time:", end_time - start_time)
+
+    objects = []
+    for i in range(output_dict['num_detections']):
+      object = {}
+      object['cls_id'] = output_dict['detection_classes'][i]
+      object['cls_name'] = self.category_index[object['cls_id']]['name']
+      object['score'] = output_dict['detection_scores'][i]
+      object['box_ymin'] = int(output_dict['detection_boxes'][i][0]*image_height)
+      object['box_xmin'] = int(output_dict['detection_boxes'][i][1]*image_width)
+      object['box_ymax'] = int(output_dict['detection_boxes'][i][2]*image_height)
+      object['box_xmax'] = int(output_dict['detection_boxes'][i][3]*image_width)
+      objects.append(object)
+    return objects
 
 def load_image_into_numpy_array(image):
   (im_width, im_height) = image.size
   return np.array(image.getdata()).reshape(
       (im_height, im_width, 3)).astype(np.uint8)
 
-def init_model(model_frozen):
-  # create graph
-  graph = create_graph(model_frozen)
-
-  with graph.as_default():
-    sess = tf.Session()
-
-    # Get handles to input and output tensors
-    ops = tf.get_default_graph().get_operations()
-    all_tensor_names = {output.name for op in ops for output in op.outputs}
-    tensor_dict = {}
-    for key in [
-        'num_detections', 'detection_boxes', 'detection_scores',
-        'detection_classes', 'detection_masks'
-    ]:
-      tensor_name = key + ':0'
-      if tensor_name in all_tensor_names:
-        tensor_dict[key] = tf.get_default_graph().get_tensor_by_name(
-            tensor_name)
-
-    image_tensor = tf.get_default_graph().get_tensor_by_name('image_tensor:0')
-
-    return image_tensor, tensor_dict, sess
-
-
-
-
 def main():
-  # labels
-  category_index = label_map_util.create_category_index_from_labelmap(FLAGS.label_path, use_display_name=True)
-
-  # init model
-  image_tensor, tensor_dict, sess = init_model(FLAGS.model_frozen)
+  # init tf_detector
+  tf_detector = TFDetector(FLAGS.model_frozen, FLAGS.label_path)
 
   image_paths = []
   if os.path.isfile(FLAGS.image_path):
@@ -83,34 +113,17 @@ def main():
   for image_path in image_paths:
     # prepare data
     image = Image.open(image_path)
-    (image_width, image_height) = image.size
+    #(image_width, image_height) = image.size
     image_np = load_image_into_numpy_array(image)
-    # Expand dimensions since the model expects images to have shape: [1, None, None, 3]
-    image_np_expanded = np.expand_dims(image_np, axis=0)
 
-    # Actual detection.
-    start_time = time.time()
-    output_dict = sess.run(tensor_dict, feed_dict={image_tensor: image_np_expanded})
-    num = int(output_dict['num_detections'][0])
-    output_dict['num_detections'] = num
-    output_dict['detection_classes'] = output_dict['detection_classes'][0].astype(np.uint8)[:num]
-    output_dict['detection_boxes'] = output_dict['detection_boxes'][0][:num]
-    output_dict['detection_scores'] = output_dict['detection_scores'][0][:num]
-    end_time = time.time()
-    print("run time:", end_time - start_time)
+    # detect
+    objects = tf_detector.detect(image_np)
 
-
-    for i in range(output_dict['num_detections']):
-      cls_id = output_dict['detection_classes'][i]
-      cls_name = category_index[cls_id]['name']
-      score = output_dict['detection_scores'][i]
-      box_ymin = int(output_dict['detection_boxes'][i][0]*image_height)
-      box_xmin = int(output_dict['detection_boxes'][i][1]*image_width)
-      box_ymax = int(output_dict['detection_boxes'][i][2]*image_height)
-      box_xmax = int(output_dict['detection_boxes'][i][3]*image_width)
-      cv2.rectangle(image_np, (box_xmin,box_ymin), (box_xmax,box_ymax), (0,255,0),3)
-      text = "%s:%.2f" % (cls_name,score)
-      cv2.putText(image_np, text, (box_xmin,box_ymin-4),cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, (255,0,0))
+    # show
+    for object in objects:
+      cv2.rectangle(image_np, (object['box_xmin'],object['box_ymin']), (object['box_xmax'],object['box_ymax']), (0,255,0),3)
+      text = "%s:%.2f" % (object['cls_name'], object['score'])
+      cv2.putText(image_np, text, (object['box_xmin'],object['box_ymin']-4),cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, (255,0,0))
 
     plt.figure(figsize=(12, 8)) # Size, in inches
     plt.imshow(image_np)
