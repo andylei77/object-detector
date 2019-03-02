@@ -1,9 +1,7 @@
 # v0.1.0
 
 ## Update
-
-- draw bbox and label
-- multi images
+- optimize session run time
 
 ## Usage
 
