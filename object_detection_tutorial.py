@@ -35,46 +35,39 @@ def load_image_into_numpy_array(image):
   return np.array(image.getdata()).reshape(
       (im_height, im_width, 3)).astype(np.uint8)
 
-def run_inference_for_single_image(image, graph):
+def init_model(model_frozen):
+  # create graph
+  graph = create_graph(model_frozen)
+
   with graph.as_default():
-    with tf.Session() as sess:
-      # Get handles to input and output tensors
-      ops = tf.get_default_graph().get_operations()
-      all_tensor_names = {output.name for op in ops for output in op.outputs}
-      tensor_dict = {}
-      for key in [
-          'num_detections', 'detection_boxes', 'detection_scores',
-          'detection_classes', 'detection_masks'
-      ]:
-        tensor_name = key + ':0'
-        if tensor_name in all_tensor_names:
-          tensor_dict[key] = tf.get_default_graph().get_tensor_by_name(
-              tensor_name)
+    sess = tf.Session()
 
-      image_tensor = tf.get_default_graph().get_tensor_by_name('image_tensor:0')
+    # Get handles to input and output tensors
+    ops = tf.get_default_graph().get_operations()
+    all_tensor_names = {output.name for op in ops for output in op.outputs}
+    tensor_dict = {}
+    for key in [
+        'num_detections', 'detection_boxes', 'detection_scores',
+        'detection_classes', 'detection_masks'
+    ]:
+      tensor_name = key + ':0'
+      if tensor_name in all_tensor_names:
+        tensor_dict[key] = tf.get_default_graph().get_tensor_by_name(
+            tensor_name)
 
-      # Run inference
-      start_time = time.time()
-      output_dict = sess.run(tensor_dict,
-                             feed_dict={image_tensor: np.expand_dims(image, 0)})
-      end_time = time.time()
-      print("run time:", end_time - start_time)
+    image_tensor = tf.get_default_graph().get_tensor_by_name('image_tensor:0')
 
-      # all outputs are float32 numpy arrays, so convert types as appropriate
-      num = int(output_dict['num_detections'][0])
-      output_dict['num_detections'] = num
-      output_dict['detection_classes'] = output_dict['detection_classes'][0].astype(np.uint8)[:num]
-      output_dict['detection_boxes'] = output_dict['detection_boxes'][0][:num]
-      output_dict['detection_scores'] = output_dict['detection_scores'][0][:num]
+    return image_tensor, tensor_dict, sess
 
-  return output_dict
+
+
 
 def main():
   # labels
   category_index = label_map_util.create_category_index_from_labelmap(FLAGS.label_path, use_display_name=True)
 
-  # create graph
-  detection_graph = create_graph(FLAGS.model_frozen)
+  # init model
+  image_tensor, tensor_dict, sess = init_model(FLAGS.model_frozen)
 
   image_paths = []
   if os.path.isfile(FLAGS.image_path):
@@ -96,7 +89,16 @@ def main():
     image_np_expanded = np.expand_dims(image_np, axis=0)
 
     # Actual detection.
-    output_dict = run_inference_for_single_image(image_np, detection_graph)
+    start_time = time.time()
+    output_dict = sess.run(tensor_dict, feed_dict={image_tensor: image_np_expanded})
+    num = int(output_dict['num_detections'][0])
+    output_dict['num_detections'] = num
+    output_dict['detection_classes'] = output_dict['detection_classes'][0].astype(np.uint8)[:num]
+    output_dict['detection_boxes'] = output_dict['detection_boxes'][0][:num]
+    output_dict['detection_scores'] = output_dict['detection_scores'][0][:num]
+    end_time = time.time()
+    print("run time:", end_time - start_time)
+
 
     for i in range(output_dict['num_detections']):
       cls_id = output_dict['detection_classes'][i]
