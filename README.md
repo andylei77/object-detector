@@ -15,6 +15,8 @@ python object_detection_tutorial.py --model_frozen ../TFMODEL/ssd_mobilenet_v1_c
 
 ## ref:
 - modify from tensorflow detection api demo(v1.13.0): https://github.com/tensorflow/models/blob/v1.13.0/research/object_detection/object_detection_tutorial.ipynb
+- http://docs.ros.org/kinetic/api/object_recognition_msgs/html/msg/RecognizedObjectArray.html
+- https://github.com/wg-perception/object_recognition_msgs.git
 
 v0.1.1
 - optimization
