@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import numpy as np
 import tensorflow as tf
 import argparse
@@ -9,6 +11,12 @@ import cv2
 from distutils.version import StrictVersion
 from PIL import Image
 from matplotlib import pyplot as plt
+
+import rospy
+from std_msgs.msg import String
+from object_recognition_msgs.msg import *
+from shape_msgs.msg import *
+from geometry_msgs.msg import *
 
 FLAGS = None
 
@@ -99,6 +107,11 @@ def main():
   # init tf_detector
   tf_detector = TFDetector(FLAGS.model_frozen, FLAGS.label_path)
 
+  # init ros_publisher
+  rospy.init_node('talker', anonymous=True)
+  pub = rospy.Publisher('chatter', RecognizedObjectArray, queue_size=10)
+  rate = rospy.Rate(10) # 10hz
+
   image_paths = []
   if os.path.isfile(FLAGS.image_path):
     image_paths.append(FLAGS.image_path)
@@ -109,8 +122,10 @@ def main():
         image_paths.append(file_path)
   print(image_paths)
 
+  idx = 0
+  while (not rospy.is_shutdown()) and idx < len(image_paths):
+    image_path = image_paths[idx]
 
-  for image_path in image_paths:
     # prepare data
     image = Image.open(image_path)
     #(image_width, image_height) = image.size
@@ -119,11 +134,26 @@ def main():
     # detect
     objects = tf_detector.detect(image_np)
 
-    # show
+    recognized_objects = RecognizedObjectArray()
+    now = rospy.Time.now()
+    recognized_objects.header.stamp = now
+    recognized_objects.header.frame_id = str(idx)
+
     for object in objects:
+      obj = RecognizedObject()
+      obj.type.key = object['cls_name']
+      obj.confidence = object['score']
+      obj.bounding_contours = [Point(object['box_xmin'],object['box_ymin'],0), Point(object['box_xmax'],object['box_ymax'],0)]
+      recognized_objects.objects.append(obj)
+
       cv2.rectangle(image_np, (object['box_xmin'],object['box_ymin']), (object['box_xmax'],object['box_ymax']), (0,255,0),3)
       text = "%s:%.2f" % (object['cls_name'], object['score'])
       cv2.putText(image_np, text, (object['box_xmin'],object['box_ymin']-4),cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, (255,0,0))
+
+    rospy.loginfo("%s %s" % (rospy.get_time(), image_path))
+    idx += 1
+    pub.publish(recognized_objects)
+    rate.sleep()
 
     plt.figure(figsize=(12, 8)) # Size, in inches
     plt.imshow(image_np)
@@ -133,13 +163,13 @@ def main():
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--image_path', type=str,
-                      default='test_images/',
+                      default='/home/andy/selfdrivingcar/catkin_ws/src/object-detection/test_images/',
                       help='image path')
   parser.add_argument('--model_frozen', type=str,
                       default='/home/andy/selfdrivingcar/TFMODEL/ssd_mobilenet_v1_coco_2018_01_28/frozen_inference_graph.pb',
                       help='model path')
   parser.add_argument('--label_path', type=str,
-                      default='label_utils/mscoco_label_map.pbtxt',
+                      default='/home/andy/selfdrivingcar/catkin_ws/src/object-detection/label_utils/mscoco_label_map.pbtxt',
                       help='label path')
   FLAGS, unparsed = parser.parse_known_args()
   main()
