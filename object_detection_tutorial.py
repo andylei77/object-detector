@@ -17,6 +17,8 @@ from std_msgs.msg import String
 from object_recognition_msgs.msg import *
 from shape_msgs.msg import *
 from geometry_msgs.msg import *
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge, CvBridgeError
 
 FLAGS = None
 
@@ -127,15 +129,19 @@ def main():
     image_path = image_paths[idx]
 
     # prepare data
-    image = Image.open(image_path)
+    #image = Image.open(image_path)
     #(image_width, image_height) = image.size
-    image_np = load_image_into_numpy_array(image)
+    #image_np = load_image_into_numpy_array(image)
+    image_np = cv2.imread(image_path)
 
     # detect
     objects = tf_detector.detect(image_np)
 
     recognized_objects = RecognizedObjectArray()
     now = rospy.Time.now()
+
+    bridge = CvBridge()
+    recognized_objects.image = bridge.cv2_to_imgmsg(image_np, "bgr8")
     recognized_objects.header.stamp = now
     recognized_objects.header.frame_id = str(idx)
 
@@ -146,24 +152,25 @@ def main():
       obj.bounding_contours = [Point(object['box_xmin'],object['box_ymin'],0), Point(object['box_xmax'],object['box_ymax'],0)]
       recognized_objects.objects.append(obj)
 
-      cv2.rectangle(image_np, (object['box_xmin'],object['box_ymin']), (object['box_xmax'],object['box_ymax']), (0,255,0),3)
-      text = "%s:%.2f" % (object['cls_name'], object['score'])
-      cv2.putText(image_np, text, (object['box_xmin'],object['box_ymin']-4),cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, (255,0,0))
+      #cv2.rectangle(image_np, (object['box_xmin'],object['box_ymin']), (object['box_xmax'],object['box_ymax']), (0,255,0),3)
+      #text = "%s:%.2f" % (object['cls_name'], object['score'])
+      #cv2.putText(image_np, text, (object['box_xmin'],object['box_ymin']-4),cv2.FONT_HERSHEY_COMPLEX_SMALL, 0.8, (255,0,0))
 
     rospy.loginfo("%s %s" % (rospy.get_time(), image_path))
     idx += 1
     pub.publish(recognized_objects)
     rate.sleep()
 
-    plt.figure(figsize=(12, 8)) # Size, in inches
-    plt.imshow(image_np)
-    plt.show()
+    #plt.figure(figsize=(12, 8)) # Size, in inches
+    #plt.imshow(image_np)
+    #plt.show()
 
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--image_path', type=str,
-                      default='/home/andy/selfdrivingcar/catkin_ws/src/object-detection/test_images/',
+                      #default='/home/andy/selfdrivingcar/catkin_ws/src/object-detection/test_images/',
+                      default='/home/andy/selfdrivingcar/data/kitti_vo/color/00/image_2',
                       help='image path')
   parser.add_argument('--model_frozen', type=str,
                       default='/home/andy/selfdrivingcar/TFMODEL/ssd_mobilenet_v1_coco_2018_01_28/frozen_inference_graph.pb',
