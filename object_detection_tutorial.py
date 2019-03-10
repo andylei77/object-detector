@@ -112,7 +112,7 @@ def main():
   # init ros_publisher
   rospy.init_node('talker', anonymous=True)
   pub = rospy.Publisher('chatter', RecognizedObjectArray, queue_size=10)
-  rate = rospy.Rate(10) # 10hz
+  rate = rospy.Rate(1) # 10hz
 
   image_paths = []
   if os.path.isfile(FLAGS.image_path):
@@ -122,6 +122,7 @@ def main():
       file_path = os.path.join(FLAGS.image_path, file_or_dir)
       if os.path.isfile(file_path) and isimage(file_path):
         image_paths.append(file_path)
+  image_paths.sort();
   print(image_paths)
 
   idx = 0
@@ -143,7 +144,7 @@ def main():
     bridge = CvBridge()
     recognized_objects.image = bridge.cv2_to_imgmsg(image_np, "bgr8")
     recognized_objects.header.stamp = now
-    recognized_objects.header.frame_id = str(idx)
+    recognized_objects.header.frame_id = "image"#str(idx);
 
     for object in objects:
       obj = RecognizedObject()
